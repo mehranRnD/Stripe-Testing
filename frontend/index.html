@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Shopping Cart</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="logo">🛒 Shopping Cart</div>
+        <ul class="nav-links">
+            <li><a href="#">Home</a></li>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Contact Us</a></li>
+            <li class="dropdown">
+                <button class="dropbtn">Currency</button>
+                <div class="dropdown-content">
+                    <a style="cursor: pointer;" onclick="changeCurrency('USD')">USD</a>
+                    <a style="cursor: pointer;" onclick="changeCurrency('PKR')">PKR</a>
+                </div>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1>🛒 Welcome to Shopping Cart</h1>
+        <p id="message">Fetching message...</p>
+
+        <h2>🛍️ Products</h2>
+        <!-- Products will be dynamically loaded here -->
+        <div class="products"></div>
+
+        <h2>🛍️ Shopping Cart</h2>
+        <ul id="cart-list"></ul>
+        <p><strong>Total: <span id="cart-total">$0.00</span></strong></p>
+        <form onsubmit="event.preventDefault(); payNow();">
+            <input type="submit" value="Proceed to Checkout">
+        </form>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
