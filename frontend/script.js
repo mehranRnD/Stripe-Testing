@@ -1,133 +1,101 @@
-// Fetch backend message
-fetch("http://localhost:3000/api/message")
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById("message").textContent = data.message;
-    })
-    .catch(error => console.error("Error fetching data:", error));
-
-// Shopping Cart Logic
-const cart = [];
-const cartList = document.getElementById("cart-list");
-const cartTotal = document.getElementById("cart-total");
+let cart = [];
 let currentCurrency = 'USD';
-let products = [];
-
-// Fixed exchange rates
 const exchangeRates = {
-    USD_TO_PKR: 279.50,
-    PKR_TO_USD: 0.00357
+  USD_TO_PKR: 279.50
 };
 
-// Fetch products from backend
-async function loadProducts() {
-    try {
-        const response = await fetch("/api/products");
-        products = await response.json();
-        displayProducts();
-    } catch (error) {
-        console.error("Error loading products:", error);
-    }
+// Fetch and display products
+async function fetchProducts() {
+  try {
+    const response = await fetch('/api/products');
+    const products = await response.json();
+    displayProducts(products);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+  }
 }
 
-// Display products in the UI
-function displayProducts() {
-    const productsContainer = document.querySelector('.products');
-    productsContainer.innerHTML = '';
-
-    products.forEach(product => {
-        const productDiv = document.createElement('div');
-        productDiv.className = 'product';
-        productDiv.innerHTML = `
-            <img src="${product.image}" alt="${product.name}">
-            <h3>${product.name}</h3>
-            <p>Price: <span class="price" data-usd="${product.price}">$${product.price.toFixed(2)}</span></p>
-            <button onclick="addToCart(${product.id})">Add to Cart</button>
-        `;
-        productsContainer.appendChild(productDiv);
-    });
+function displayProducts(products) {
+  const productsContainer = document.getElementById('products');
+  productsContainer.innerHTML = products.map(product => `
+    <div class="product-card">
+      <img src="${product.image}" alt="${product.name}" class="product-image">
+      <div class="product-info">
+        <h3>${product.name}</h3>
+        <p>${product.description || 'Beautiful accommodation'}</p>
+        <p class="price">${formatPrice(product.price)}</p>
+        <button onclick="addToCart(${JSON.stringify(product).replace(/"/g, '&quot;')})">
+          Add to Cart
+        </button>
+      </div>
+    </div>
+  `).join('');
 }
 
-function getProduct(productId) {
-    return products.find(p => p.id === productId);
-}
-
-function addToCart(productId) {
-    const product = getProduct(productId);
-    if (!product) return;
-
-    cart.push({
-        id: product.id,
-        name: product.name,
-        priceUSD: product.price,
-        pricePKR: product.price * exchangeRates.USD_TO_PKR
-    });
-    updateCart();
-}
-
-function updateCart() {
-    cartList.innerHTML = "";
-    let totalUSD = 0;
-    let totalPKR = 0;
-
-    cart.forEach(item => {
-        totalUSD += item.priceUSD;
-        totalPKR += item.pricePKR;
-        const li = document.createElement("li");
-        const price = currentCurrency === 'PKR' ? 
-            `Rs ${item.pricePKR.toFixed(0)}` : 
-            `$${item.priceUSD.toFixed(2)}`;
-        li.textContent = `${item.name} - ${price}`;
-        cartList.appendChild(li);
-    });
-
-    cartTotal.textContent = currentCurrency === 'PKR' ? 
-        `Rs ${totalPKR.toFixed(0)}` : 
-        `$${totalUSD.toFixed(2)}`;
+function formatPrice(price) {
+  if (currentCurrency === 'PKR') {
+    const pkrPrice = price * exchangeRates.USD_TO_PKR;
+    return `Rs. ${pkrPrice.toFixed(0)}`;
+  }
+  return `$${price}`;
 }
 
 function changeCurrency(currency) {
-    currentCurrency = currency;
-    const prices = document.querySelectorAll('.price');
-    
-    prices.forEach(price => {
-        const usdPrice = parseFloat(price.getAttribute('data-usd'));
-        if (currency === 'PKR') {
-            const pkrPrice = usdPrice * exchangeRates.USD_TO_PKR;
-            price.innerHTML = `Rs ${pkrPrice.toFixed(0)}`;
-        } else {
-            price.innerHTML = `$${usdPrice.toFixed(2)}`;
-        }
+  currentCurrency = currency;
+  fetchProducts(); // Refresh the display with new currency
+  updateCartDisplay();
+}
+
+function addToCart(product) {
+  const existingItem = cart.find(item => item.id === product.id);
+  if (existingItem) {
+    existingItem.quantity = (existingItem.quantity || 1) + 1;
+  } else {
+    cart.push({ ...product, quantity: 1 });
+  }
+  updateCartDisplay();
+}
+
+function updateCartDisplay() {
+  const cartContainer = document.getElementById('cart-items');
+  const total = cart.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+  
+  cartContainer.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <img src="${item.image}" alt="${item.name}" class="cart-item-image">
+      <div class="cart-item-details">
+        <h4>${item.name}</h4>
+        <p>${formatPrice(item.price)} x ${item.quantity || 1}</p>
+        <button onclick="removeFromCart(${item.id})">Remove</button>
+      </div>
+    </div>
+  `).join('');
+  
+  document.getElementById('cart-total').textContent = formatPrice(total);
+}
+
+function removeFromCart(productId) {
+  cart = cart.filter(item => item.id !== productId);
+  updateCartDisplay();
+}
+
+// Handle checkout
+document.getElementById('checkout-button').addEventListener('click', async () => {
+  try {
+    const response = await fetch('/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: cart }),
     });
     
-    updateCart();
-}
+    const { url } = await response.json();
+    window.location = url;
+  } catch (error) {
+    console.error('Error during checkout:', error);
+  }
+});
 
-function payNow() {
-    if (cart.length === 0) {
-        alert('Please add items to your cart first');
-        return;
-    }
-
-    fetch("/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            items: cart.map(item => ({
-                name: item.name,
-                price: item.priceUSD,
-                quantity: 1
-            }))
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.url) {
-            window.location.href = data.url;
-        }
-    })
-    .catch(error => console.error("Error:", error));
-}
-
-// Load products when page loads
-loadProducts();
+// Initialize
+fetchProducts();

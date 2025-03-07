@@ -1,78 +1,64 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const axios = require("axios");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+const HOSTAWAY_TOKEN =
+  "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI4MDA2NiIsImp0aSI6ImE0OTkzMDcyMzdiNmQyODA2M2NlYzYwZjUzM2RmYTM1NTU4ZjU0Yzc4OTJhMTk5MmFkZGNhYjZlZWE5NTE1MzFjMDYwM2UzMGI5ZjczZDRhIiwiaWF0IjoxNzM5MjcwMjM2LjA0NzE4LCJuYmYiOjE3MzkyNzAyMzYuMDQ3MTgyLCJleHAiOjIwNTQ4MDMwMzYuMDQ3MTg2LCJzdWIiOiIiLCJzY29wZXMiOlsiZ2VuZXJhbCJdLCJzZWNyZXRJZCI6NTI0OTJ9.n_QTZxeFcJn121EGofg290ReOoNE7vMJAE4-lnXhNbLCZw0mIJu1KQWE5pM0xPUcUHeJ-7XTQfS0U5yIkabGi7vGGex0yx9A0h03fn7ZBAtCzPLq_Xmj8ZOdHzahpRqxRsNRRNOlnbttTSrpSo4NJCdK6yhMTKrKkTTVh60IJIc";
+
 // Fixed exchange rates
 const exchangeRates = {
-  USD_TO_PKR: 279.50,
+  USD_TO_PKR: 279.5,
 };
-
-// Product data
-const products = [
-  {
-    id: 1,
-    name: "Wireless Headphones",
-    price: 49,
-    image: "https://images.pexels.com/photos/3394662/pexels-photo-3394662.jpeg",
-  },
-  {
-    id: 2,
-    name: "2 TB Flash Drive",
-    price: 84,
-    image: "https://images.pexels.com/photos/3631991/pexels-photo-3631991.jpeg",
-  },
-  {
-    id: 3,
-    name: "Gaming Mouse",
-    price: 49,
-    image:
-      "https://images.pexels.com/photos/2115256/pexels-photo-2115256.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-  },
-  {
-    id: 4,
-    name: "Mechanical Keyboard",
-    price: 129,
-    image:
-      "https://images.pexels.com/photos/1714205/pexels-photo-1714205.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-  },
-  {
-    id: 5,
-    name: "Smartphone Stand",
-    price: 19,
-    image:
-      "https://images.pexels.com/photos/4152562/pexels-photo-4152562.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-  },
-];
 
 app.use(cors());
 app.use(express.json());
-
-// Serve static frontend files
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-// Handle root route
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/index.html"));
 });
 
-// Success route
 app.get("/complete", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/complete.html"));
 });
 
-// Cancel route
 app.get("/cancel", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/cancel.html"));
 });
 
-// Get products endpoint
-app.get("/api/products", (req, res) => {
-  res.json(products);
+app.get("/api/products", async (req, res) => {
+  try {
+    const response = await axios.get('https://api.hostaway.com/v1/listings', {
+      headers: {
+        'Authorization': HOSTAWAY_TOKEN
+      }
+    });
+
+    // Debug: Log the first listing to see its structure
+    console.log('First listing data:', JSON.stringify(response.data.result[0], null, 2));
+
+    const listings = response.data.result.map(listing => ({
+      id: listing.id,
+      name: listing.name,
+      price: listing.basePrice || listing.price || 99,
+      image: listing.picture, // Use the picture URL directly from the API
+      description: listing.description || 'Beautiful accommodation'
+    }));
+
+    // Debug: Log the transformed listings
+    // console.log('Transformed listings:', JSON.stringify(listings, null, 2));
+
+    res.json(listings);
+  } catch (error) {
+    console.error('Error fetching listings:', error);
+    res.status(500).json({ error: 'Failed to fetch listings' });
+  }
 });
 
 app.get("/api/message", (req, res) => {
@@ -92,7 +78,9 @@ app.post("/checkout", async (req, res) => {
         currency: "usd",
         product_data: {
           name: item.name,
-          description: `Price in PKR: Rs ${(item.price * exchangeRates.USD_TO_PKR).toFixed(0)}`,
+          description: `Price in PKR: Rs ${(
+            item.price * exchangeRates.USD_TO_PKR
+          ).toFixed(2)}`,
         },
         unit_amount: item.price * 100, // Convert to cents
       },
@@ -107,7 +95,8 @@ app.post("/checkout", async (req, res) => {
       cancel_url: `${process.env.BASE_URL}/cancel`,
       custom_text: {
         submit: {
-          message: 'Note: All payments are processed in USD. PKR prices are shown for reference only.',
+          message:
+            "Note: All payments are processed in USD.\nPKR prices are shown for reference only.",
         },
       },
     });
